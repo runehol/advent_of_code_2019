@@ -5,6 +5,7 @@
 //  Created by Rune Holm on 29/10/2022.
 //
 
+import BigNumber;
 import Foundation
 
 let OpAdd = 1;
@@ -22,8 +23,23 @@ let ModePos = 0;
 let ModeImm = 1;
 let ModeRel = 2;
 
+func asInt(_ bi: BInt) -> Int
+{
+	let (sign, limbs) = bi.rawValue;
+	if limbs.count > 1
+	{
+		fatalError("Too large value");
+	}
+	let number = limbs[0];
+	if number > Int.max
+	{
+			fatalError("Too large value")
+	}
+	
+	return sign ? -Int(number) : Int(number);
+}
 
-func alu(opcode: Int, a: Int, b: Int) -> Int
+func alu(opcode: Int, a: BInt, b: BInt) -> BInt
 {
 	switch(opcode)
 	{
@@ -41,34 +57,36 @@ func alu(opcode: Int, a: Int, b: Int) -> Int
 }
 
 
-typealias Memory = [Int];
+typealias Memory = [BInt];
 
-func read(memory: Memory, addr: Int) -> Int
+func read(memory: Memory, addr: BInt) -> BInt
 {
-	if addr < memory.count
+	let iaddr = asInt(addr);
+	if iaddr < memory.count
 	{
-		return memory[addr];
+		return memory[iaddr];
 	}
 	return 0;
 }
 
-func write(memory: inout Memory, addr: Int, value: Int) -> ()
+func write(memory: inout Memory, addr: BInt, value: BInt) -> ()
 {
-	if(addr >= memory.count)
+	let iaddr = asInt(addr);
+	if(iaddr >= memory.count)
 	{
-		memory.reserveCapacity(addr+1);
-		while(addr >= memory.count)
+		memory.reserveCapacity(iaddr+1);
+		while(iaddr >= memory.count)
 		{
 			memory.append(0);
 		}
 	}
-	memory[addr] = value;
+	memory[iaddr] = value;
 }
 
 
 
 
-func read_parameter(memory: Memory, mode: Int, addr: Int, relative_base: Int) -> Int
+func read_parameter(memory: Memory, mode: Int, addr: BInt, relative_base: BInt) -> BInt
 {
 	let param = read(memory:memory, addr:addr);
 	switch(mode)
@@ -84,7 +102,7 @@ func read_parameter(memory: Memory, mode: Int, addr: Int, relative_base: Int) ->
 	}
 }
 
-func write_addr(memory: Memory, mode: Int, addr: Int, relative_base: Int) -> Int
+func write_addr(memory: Memory, mode: Int, addr: BInt, relative_base: BInt) -> BInt
 {
 	let param = read(memory:memory, addr:addr);
 	switch(mode)
@@ -99,15 +117,19 @@ func write_addr(memory: Memory, mode: Int, addr: Int, relative_base: Int) -> Int
 }
 
 
-func execute(initial_memory: [Int], input: [Int]) -> Int
+func execute(initial_memory: [Int], input: [Int]) -> BInt
 {
 	var input_pos = 0;
-	var memory : Memory = initial_memory;
-	var pc = 0;
-	var relative_base = 0;
+	var memory : Memory = [];
+	for (addr, v) in initial_memory.enumerated()
+	{
+		write(memory:&memory, addr:BInt(addr), value:BInt(v));
+	}
+	var pc : BInt = 0;
+	var relative_base : BInt = 0;
 	while true
 	{
-		let first_pos = read(memory:memory, addr:pc);
+		let first_pos = asInt(read(memory:memory, addr:pc));
 		let opcode = first_pos % 100;
 		let mode1 = (first_pos /   100)%10;
 		let mode2 = (first_pos /  1000)%10;
@@ -126,7 +148,7 @@ func execute(initial_memory: [Int], input: [Int]) -> Int
 			pc += 4;
 		case OpInput:
 			let d = write_addr    (memory: memory, mode: mode3, addr: pc+1, relative_base: relative_base);
-			let result = input[input_pos];
+			let result = BInt(input[input_pos]);
 			input_pos += 1;
 			write(memory:&memory, addr:d, value:result);
 			pc += 2;
@@ -151,7 +173,7 @@ func execute(initial_memory: [Int], input: [Int]) -> Int
 			}
 
 		default:
-			fatalError(String(format: "Unknown opcode %x, pc %x", opcode, pc))
+			fatalError(String(format: "Unknown opcode %x, pc %x", opcode, asInt(pc)))
 
 		}
 	}
@@ -204,4 +226,6 @@ let day9_program = [1102,34463338,34463338,63,1007,63,34463338,63,1005,63,53,110
 
 
 print("Day 9a: ")
+
+
 let _ = execute(initial_memory: day9_program, input: [1]);
