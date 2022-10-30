@@ -116,25 +116,139 @@ func write_addr(memory: Memory, mode: Int, addr: BInt, relative_base: BInt) -> B
 	}
 }
 
+func decode_first_word(_ w: BInt) -> (Int, Int, Int, Int)
+{
+	let word = asInt(w);
+	let opcode = word % 100;
+	let mode1 = (word /   100)%10;
+	let mode2 = (word /  1000)%10;
+	let mode3 = (word / 10000)%10;
+	return (opcode, mode1, mode2, mode3);
+}
 
-func execute(initial_memory: [Int], input: [Int]) -> BInt
+
+
+func opcode_to_str(_ opcode: Int) -> String
+{
+	switch(opcode)
+	{
+	case OpTerminate:
+		return "Terminate";
+	case OpAdd:
+		return "Add";
+	case OpMul:
+		return "Mul";
+	case OpLt:
+		return "Lt";
+	case OpEq:
+		return "Eq";
+		
+	case OpInput:
+		return "Input";
+
+	case OpOutput:
+		return "Output";
+		
+	case OpAdjustRelativeBase:
+		return "AdjustRelativeBase";
+
+	case OpJmpTrue:
+		return "JmpIfTrue";
+	case OpJmpFalse:
+		return "JmpIfFalse";
+
+	default:
+		return "Unknown";
+
+	}
+}
+
+func param_to_str_raw(memory: Memory, mode: Int, addr: BInt) -> String
+{
+	let param = String(read(memory:memory, addr:addr));
+	switch(mode)
+	{
+	case ModePos:
+		return String(format:"m[%@]", param);
+	case ModeRel:
+		return String(format:"m[relative_base+%@]", param);
+	case ModeImm:
+		return String(format:"%@", param)
+	default:
+		return "Unknown";
+	}
+}
+func param_to_str(memory: Memory, mode: Int, addr: BInt, show_memory:Bool=false, relative_base: BInt=BInt(0)) -> String
+{
+	let s = param_to_str_raw(memory:memory, mode: mode, addr: addr);
+	if(show_memory)
+	{
+		let v = read_parameter(memory: memory, mode: mode, addr: addr, relative_base: relative_base)
+		return s + "=" + String(v);
+	} else {
+		return s;
+	}
+}
+
+
+func disassemble_instr(memory: Memory, pc: BInt, show_memory: Bool=false, relative_base:BInt=BInt(0)) -> (String, BInt)
+{
+	let (opcode, mode1, mode2, mode3) = decode_first_word(read(memory:memory, addr:pc));
+	let param1 = param_to_str(memory: memory, mode: mode1, addr:pc+1, show_memory: show_memory, relative_base: relative_base);
+	let param2 = param_to_str(memory: memory, mode: mode2, addr:pc+2, show_memory: show_memory, relative_base: relative_base);
+	let param3 = param_to_str(memory: memory, mode: mode3, addr:pc+3);
+	let opcode_name = opcode_to_str(opcode);
+	switch(opcode)
+	{
+	case OpTerminate:
+		return (opcode_name, pc+1);
+	case OpAdd, OpMul, OpLt, OpEq:
+		return ("\(opcode_name) \(param3), \(param1), \(param2)", pc+4)
+	case OpInput, OpOutput, OpAdjustRelativeBase:
+		return ("\(opcode_name) \(param1)", pc+2);
+
+	case OpJmpTrue, OpJmpFalse:
+		return ("\(opcode_name) \(param1), \(param2)", pc+3);
+
+	default:
+		return (String(format: "Unknown opcode %x, pc %x", opcode, asInt(pc)), pc+1)
+
+	}
+
+	
+}
+
+func make_memory(_ initial_memory: [Int]) -> Memory
+{
+	return initial_memory.map { BInt($0) };
+}
+
+func disassemble(memory: [BInt])
+{
+	var pc = BInt(0);
+	while(asInt(pc) < memory.count)
+	{
+		let (disas, next_pc) = disassemble_instr(memory: memory, pc: pc);
+		print(String(format:"%04d %@", asInt(pc), disas));
+		pc = next_pc;
+	}
+}
+
+
+func execute(initial_memory: [Int], input: [Int], trace:Bool=false) -> BInt
 {
 	var input_pos = 0;
-	var memory : Memory = [];
-	for (addr, v) in initial_memory.enumerated()
-	{
-		write(memory:&memory, addr:BInt(addr), value:BInt(v));
-	}
+	var memory : Memory = make_memory(initial_memory);
 	var pc : BInt = 0;
 	var relative_base : BInt = 0;
 	while true
 	{
-		let first_pos = asInt(read(memory:memory, addr:pc));
-		let opcode = first_pos % 100;
-		let mode1 = (first_pos /   100)%10;
-		let mode2 = (first_pos /  1000)%10;
-		let mode3 = (first_pos / 10000)%10;
-		//print("Executing", pc, first_pos)
+		if(trace)
+		{
+			let (disas, _) = disassemble_instr(memory: memory, pc: pc, show_memory: true, relative_base: relative_base);
+			print(String(format:"%#04d %@", asInt(pc), disas));
+		}
+		let (opcode, mode1, mode2, mode3) = decode_first_word(read(memory:memory, addr:pc));
 		switch(opcode)
 		{
 		case OpTerminate:
@@ -147,7 +261,7 @@ func execute(initial_memory: [Int], input: [Int]) -> BInt
 			write(memory:&memory, addr:d, value:result);
 			pc += 4;
 		case OpInput:
-			let d = write_addr    (memory: memory, mode: mode3, addr: pc+1, relative_base: relative_base);
+			let d = write_addr(memory: memory, mode: mode1, addr: pc+1, relative_base: relative_base);
 			let result = BInt(input[input_pos]);
 			input_pos += 1;
 			write(memory:&memory, addr:d, value:result);
@@ -226,6 +340,8 @@ let day9_program = [1102,34463338,34463338,63,1007,63,34463338,63,1005,63,53,110
 
 
 print("Day 9a: ")
-
-
 let _ = execute(initial_memory: day9_program, input: [1]);
+
+
+print("Day 9b: ")
+let _ = execute(initial_memory: day9_program, input: [2]);
