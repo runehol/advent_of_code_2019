@@ -216,7 +216,7 @@ func disassemble(memory: [Int])
 }
 
 
-func execute(initial_memory: [Int], input: [Int], trace:Bool=false) -> Int
+func execute(initial_memory: [Int], input: [Int]) -> Int
 {
 	var input_pos = 0;
 	var memory : Memory = make_memory(initial_memory);
@@ -224,11 +224,6 @@ func execute(initial_memory: [Int], input: [Int], trace:Bool=false) -> Int
 	var relative_base : Int = 0;
 	while true
 	{
-		if(trace)
-		{
-			let (disas, _) = disassemble_instr(memory: memory, pc: pc, show_memory: true, relative_base: relative_base);
-			print(String(format:"%#04d %@", pc, disas));
-		}
 		let (opcode, mode1, mode2, mode3) = decode_first_word(read(memory:memory, addr:pc));
 		switch(opcode)
 		{
