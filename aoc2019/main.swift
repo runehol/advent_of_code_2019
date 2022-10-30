@@ -5,7 +5,6 @@
 //  Created by Rune Holm on 29/10/2022.
 //
 
-import BigNumber;
 import Foundation
 
 let OpAdd = 1;
@@ -23,23 +22,8 @@ let ModePos = 0;
 let ModeImm = 1;
 let ModeRel = 2;
 
-func asInt(_ bi: BInt) -> Int
-{
-	let (sign, limbs) = bi.rawValue;
-	if limbs.count > 1
-	{
-		fatalError("Too large value");
-	}
-	let number = limbs[0];
-	if number > Int.max
-	{
-			fatalError("Too large value")
-	}
-	
-	return sign ? -Int(number) : Int(number);
-}
 
-func alu(opcode: Int, a: BInt, b: BInt) -> BInt
+func alu(opcode: Int, a: Int, b: Int) -> Int
 {
 	switch(opcode)
 	{
@@ -57,36 +41,34 @@ func alu(opcode: Int, a: BInt, b: BInt) -> BInt
 }
 
 
-typealias Memory = [BInt];
+typealias Memory = [Int];
 
-func read(memory: Memory, addr: BInt) -> BInt
+func read(memory: Memory, addr: Int) -> Int
 {
-	let iaddr = asInt(addr);
-	if iaddr < memory.count
+	if addr < memory.count
 	{
-		return memory[iaddr];
+		return memory[addr];
 	}
 	return 0;
 }
 
-func write(memory: inout Memory, addr: BInt, value: BInt) -> ()
+func write(memory: inout Memory, addr: Int, value: Int) -> ()
 {
-	let iaddr = asInt(addr);
-	if(iaddr >= memory.count)
+	if(addr >= memory.count)
 	{
-		memory.reserveCapacity(iaddr+1);
-		while(iaddr >= memory.count)
+		memory.reserveCapacity(addr+1);
+		while(addr >= memory.count)
 		{
 			memory.append(0);
 		}
 	}
-	memory[iaddr] = value;
+	memory[addr] = value;
 }
 
 
 
 
-func read_parameter(memory: Memory, mode: Int, addr: BInt, relative_base: BInt) -> BInt
+func read_parameter(memory: Memory, mode: Int, addr: Int, relative_base: Int) -> Int
 {
 	let param = read(memory:memory, addr:addr);
 	switch(mode)
@@ -102,7 +84,7 @@ func read_parameter(memory: Memory, mode: Int, addr: BInt, relative_base: BInt) 
 	}
 }
 
-func write_addr(memory: Memory, mode: Int, addr: BInt, relative_base: BInt) -> BInt
+func write_addr(memory: Memory, mode: Int, addr: Int, relative_base: Int) -> Int
 {
 	let param = read(memory:memory, addr:addr);
 	switch(mode)
@@ -116,9 +98,8 @@ func write_addr(memory: Memory, mode: Int, addr: BInt, relative_base: BInt) -> B
 	}
 }
 
-func decode_first_word(_ w: BInt) -> (Int, Int, Int, Int)
+func decode_first_word(_ word: Int) -> (Int, Int, Int, Int)
 {
-	let word = asInt(w);
 	let opcode = word % 100;
 	let mode1 = (word /   100)%10;
 	let mode2 = (word /  1000)%10;
@@ -163,7 +144,7 @@ func opcode_to_str(_ opcode: Int) -> String
 	}
 }
 
-func param_to_str_raw(memory: Memory, mode: Int, addr: BInt) -> String
+func param_to_str_raw(memory: Memory, mode: Int, addr: Int) -> String
 {
 	let param = String(read(memory:memory, addr:addr));
 	switch(mode)
@@ -178,7 +159,7 @@ func param_to_str_raw(memory: Memory, mode: Int, addr: BInt) -> String
 		return "Unknown";
 	}
 }
-func param_to_str(memory: Memory, mode: Int, addr: BInt, show_memory:Bool=false, relative_base: BInt=BInt(0)) -> String
+func param_to_str(memory: Memory, mode: Int, addr: Int, show_memory:Bool=false, relative_base: Int=Int(0)) -> String
 {
 	let s = param_to_str_raw(memory:memory, mode: mode, addr: addr);
 	if(show_memory)
@@ -191,7 +172,7 @@ func param_to_str(memory: Memory, mode: Int, addr: BInt, show_memory:Bool=false,
 }
 
 
-func disassemble_instr(memory: Memory, pc: BInt, show_memory: Bool=false, relative_base:BInt=BInt(0)) -> (String, BInt)
+func disassemble_instr(memory: Memory, pc: Int, show_memory: Bool=false, relative_base:Int=Int(0)) -> (String, Int)
 {
 	let (opcode, mode1, mode2, mode3) = decode_first_word(read(memory:memory, addr:pc));
 	let param1 = param_to_str(memory: memory, mode: mode1, addr:pc+1, show_memory: show_memory, relative_base: relative_base);
@@ -211,7 +192,7 @@ func disassemble_instr(memory: Memory, pc: BInt, show_memory: Bool=false, relati
 		return ("\(opcode_name) \(param1), \(param2)", pc+3);
 
 	default:
-		return (String(format: "Unknown opcode %x, pc %x", opcode, asInt(pc)), pc+1)
+		return (String(format: "Unknown opcode %x, pc %x", opcode, pc), pc+1)
 
 	}
 
@@ -220,33 +201,33 @@ func disassemble_instr(memory: Memory, pc: BInt, show_memory: Bool=false, relati
 
 func make_memory(_ initial_memory: [Int]) -> Memory
 {
-	return initial_memory.map { BInt($0) };
+	return initial_memory.map { Int($0) };
 }
 
-func disassemble(memory: [BInt])
+func disassemble(memory: [Int])
 {
-	var pc = BInt(0);
-	while(asInt(pc) < memory.count)
+	var pc = Int(0);
+	while(pc < memory.count)
 	{
 		let (disas, next_pc) = disassemble_instr(memory: memory, pc: pc);
-		print(String(format:"%04d %@", asInt(pc), disas));
+		print(String(format:"%04d %@", pc, disas));
 		pc = next_pc;
 	}
 }
 
 
-func execute(initial_memory: [Int], input: [Int], trace:Bool=false) -> BInt
+func execute(initial_memory: [Int], input: [Int], trace:Bool=false) -> Int
 {
 	var input_pos = 0;
 	var memory : Memory = make_memory(initial_memory);
-	var pc : BInt = 0;
-	var relative_base : BInt = 0;
+	var pc : Int = 0;
+	var relative_base : Int = 0;
 	while true
 	{
 		if(trace)
 		{
 			let (disas, _) = disassemble_instr(memory: memory, pc: pc, show_memory: true, relative_base: relative_base);
-			print(String(format:"%#04d %@", asInt(pc), disas));
+			print(String(format:"%#04d %@", pc, disas));
 		}
 		let (opcode, mode1, mode2, mode3) = decode_first_word(read(memory:memory, addr:pc));
 		switch(opcode)
@@ -262,7 +243,7 @@ func execute(initial_memory: [Int], input: [Int], trace:Bool=false) -> BInt
 			pc += 4;
 		case OpInput:
 			let d = write_addr(memory: memory, mode: mode1, addr: pc+1, relative_base: relative_base);
-			let result = BInt(input[input_pos]);
+			let result = Int(input[input_pos]);
 			input_pos += 1;
 			write(memory:&memory, addr:d, value:result);
 			pc += 2;
@@ -287,7 +268,7 @@ func execute(initial_memory: [Int], input: [Int], trace:Bool=false) -> BInt
 			}
 
 		default:
-			fatalError(String(format: "Unknown opcode %x, pc %x", opcode, asInt(pc)))
+			fatalError(String(format: "Unknown opcode %x, pc %x", opcode, pc))
 
 		}
 	}
@@ -345,3 +326,4 @@ let _ = execute(initial_memory: day9_program, input: [1]);
 
 print("Day 9b: ")
 let _ = execute(initial_memory: day9_program, input: [2]);
+
